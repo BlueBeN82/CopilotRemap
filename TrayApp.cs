@@ -418,25 +418,29 @@ public sealed class TrayApp : ApplicationContext
 
     private static void CreateShortcut(string shortcutPath, string targetPath, string arguments)
     {
-        var script = Path.Combine(Path.GetTempPath(), "CopilotRemap_mklink.ps1");
-        File.WriteAllText(script,
-            $"$ws = New-Object -ComObject WScript.Shell\n" +
-            $"$s = $ws.CreateShortcut('{shortcutPath.Replace("'", "''")}')\n" +
-            $"$s.TargetPath = '{targetPath.Replace("'", "''")}'\n" +
-            $"$s.Arguments = '{arguments.Replace("'", "''")}'\n" +
-            $"$s.Save()\n");
+        // Use -Command with properly escaped parameters instead of writing a temp script file.
+        // This avoids TOCTOU race conditions on the temp file and reduces injection surface.
+        var psCommand =
+            "$ws = New-Object -ComObject WScript.Shell; " +
+            $"$s = $ws.CreateShortcut([System.Management.Automation.WildcardPattern]::Escape('{EscapePowerShellString(shortcutPath)}')); " +
+            $"$s.TargetPath = '{EscapePowerShellString(targetPath)}'; " +
+            $"$s.Arguments = '{EscapePowerShellString(arguments)}'; " +
+            "$s.Save()";
 
         var proc = Process.Start(new ProcessStartInfo
         {
             FileName = "powershell.exe",
-            Arguments = $"-NoProfile -ExecutionPolicy Bypass -File \"{script}\"",
+            Arguments = $"-NoProfile -ExecutionPolicy Bypass -Command \"{psCommand.Replace("\"", "\\\"")}\"",
             CreateNoWindow = true,
             UseShellExecute = false
         });
         proc?.WaitForExit();
-
-        try { File.Delete(script); } catch { }
     }
+
+    /// <summary>
+    /// Escapes a string for safe inclusion in a PowerShell single-quoted string.
+    /// </summary>
+    private static string EscapePowerShellString(string value) => value.Replace("'", "''");
 
     // --- Config persistence ---
 
