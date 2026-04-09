@@ -275,17 +275,26 @@ public sealed class TrayApp : ApplicationContext
     {
         using var dialog = new InputDialog(
             "Custom URL",
-            "URL to open in browser:",
+            "URL to open in browser (https:// only):",
             "https://");
 
         if (dialog.ShowDialog() != DialogResult.OK || string.IsNullOrWhiteSpace(dialog.Value)) return null;
 
         var url = dialog.Value.Trim();
+
+        if (!Uri.TryCreate(url, UriKind.Absolute, out var parsedUri)
+            || (parsedUri.Scheme != "https" && parsedUri.Scheme != "http"))
+        {
+            MessageBox.Show("Only http:// and https:// URLs are allowed.",
+                "Invalid URL", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            return null;
+        }
+
         return new AppAction
         {
             Type = ActionType.OpenUrl,
-            Target = url,
-            DisplayName = new Uri(url).Host
+            Target = parsedUri.AbsoluteUri,
+            DisplayName = parsedUri.Host
         };
     }
 

@@ -47,9 +47,12 @@ public sealed class AppAction
                 break;
 
             case ActionType.OpenUrl:
+                if (!Uri.TryCreate(Target, UriKind.Absolute, out var uri)
+                    || (uri.Scheme != "https" && uri.Scheme != "http"))
+                    throw new InvalidOperationException($"Invalid or disallowed URL scheme: {Target}");
                 Process.Start(new ProcessStartInfo
                 {
-                    FileName = Target,
+                    FileName = uri.AbsoluteUri,
                     UseShellExecute = true
                 });
                 break;
